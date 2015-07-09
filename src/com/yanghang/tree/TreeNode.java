@@ -1,21 +1,27 @@
 package com.yanghang.tree;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * @version 0.1
  * @author yanghang
- *@date 20150528
- *
+ * @date 20150528
+ * @see 实现一个多叉树的结构,根节点父节点id默认为0
  */
 public class TreeNode {
 	private int parentId;
 	private int selfId;
 	private String text;
-	private List<TreeNode> childList = new ArrayList<TreeNode>();
+	private List<TreeNode> childList = new LinkedList<TreeNode>();
 
 	/**
 	 * 默认无参构造函数
@@ -23,7 +29,6 @@ public class TreeNode {
 	public TreeNode() {
 	}
 
-	
 	/**
 	 * 构造函数
 	 * 
@@ -65,7 +70,7 @@ public class TreeNode {
 	 * @return
 	 */
 	public List<TreeNode> getJuniors() {
-		List<TreeNode> juniorList = new ArrayList<TreeNode>();
+		List<TreeNode> juniorList = new LinkedList<TreeNode>();
 		List<TreeNode> childList = getChildList();
 		if (childList.isEmpty()) {
 			return juniorList;
@@ -102,8 +107,7 @@ public class TreeNode {
 			if (child.getSelfId() == childId) {
 				childList.remove(i);
 				return;
-			}
-			else{
+			} else {
 				child.deleteChildNode(childId);
 			}
 		}
@@ -157,21 +161,23 @@ public class TreeNode {
 		}
 		return null;
 	}
-	
+
 	/**
-	 * 构造无序的多叉树，返回根节点
+	 * 根据树节点构造无序的多叉树，返回根节点
+	 * 
 	 * @param map
 	 * @return
 	 */
-	public static TreeNode generateTree(Map<Integer, TreeNode> map,int rootId) {
+	public static TreeNode generateTreeFromNode(List<TreeNode> treeNodeList) {
+		Map<Integer, TreeNode> map = getIdAndTreeNode(treeNodeList);
 		TreeNode root = null;
 		Set entrySet = map.entrySet();
 		for (Iterator it = entrySet.iterator(); it.hasNext();) {
 			TreeNode node = (TreeNode) ((Map.Entry) it.next()).getValue();
-			if (node.getParentId() == rootId) {
+			if (node.getParentId() == 0) {
 				root = node;
 			} else {
-				//将子节点放到父节点下面
+				// 将子节点放到父节点下面
 				((TreeNode) map.get(node.getParentId())).addChildNode(node);
 			}
 		}
@@ -179,47 +185,60 @@ public class TreeNode {
 	}
 
 	/**
-	 * 树的先序遍历
+	 * 根据json字符串构造无序的多叉树，返回根节点
+	 * 
+	 * @param json
+	 * @return
+	 * @throws JSONException 
 	 */
-	public void traverse() {
-		// 可换成其他遍历节点的方法
-		System.out.println(selfId);
-
-		if (childList.isEmpty())
-			return;
-		for (int i = 0; i < childList.size(); i++) {
-			childList.get(i).traverse();
+	public static TreeNode generateTreeFromJson(String json) throws JSONException {
+		TreeNode root = new TreeNode();
+		JSONObject obj = new JSONObject(json);
+		root.setParentId(0);
+		root.setSelfId(obj.getInt("id"));
+		root.setText(obj.getString("text"));
+		//得到本节点id，作为子节点的parentId
+		int pId = root.getSelfId();
+		JSONArray arr = obj.getJSONArray("children");
+		for (int i = 0; i < arr.length(); i++) {
+			JSONObject tempObj = arr.getJSONObject(i);
+			TreeNode tNode = generateTreeFromJson(tempObj.toString());
+			tNode.setParentId(pId);
+			root.addChildNode(tNode);
 		}
+		return root;
+	}
+
+	/**
+	 * 树的先序遍历，返回结点List
+	 */
+	public List<TreeNode> traverse() {
+		List<TreeNode> nodeList = new LinkedList<TreeNode>();
+		TreeNode tNode = new TreeNode();
+		tNode.setParentId(parentId);
+		tNode.setSelfId(selfId);
+		tNode.setText(text);
+		nodeList.add(tNode);
+		if (childList.isEmpty())
+			return nodeList;
+		for (int i = 0; i < childList.size(); i++) {
+			nodeList.addAll(childList.get(i).traverse());
+		}
+		return nodeList;
 	}
 
 	/**
 	 * 将整棵树转化为JSON格式
 	 */
-	public String toString() {    
-		  String result = "{\n"
-		   + "id : '" + selfId + "',\n"  
-		   + "text : '" + text + "',\n"
-		   ;  
-		  if (!childList.isEmpty()) {  
-			   result += "children : "+ childRenToString();  
-			  } else {  
-			   result += "leaf : true\n";  
-			  }  
-		  return result + "}\n";  
-		 }	
-	
-	/**
-	 * 将孩子节点数据变为JSON格式字符串
-	 */
-	private String childRenToString() {
-		String result = "[\n";
-		for (Iterator<TreeNode> it = childList.iterator(); it.hasNext();) {
-			result += ((TreeNode) it.next()).toString();
-			result += ",\n";
+	public String toString() {
+		String result = "{\n" + "\"id\" : " + selfId + ",\n" + "\"text\" : \""
+				+ text + "\",\n";
+		if (!childList.isEmpty()) {
+			result += "\"children\" : " + childRenToString();
+		} else {
+			result += "\"children\":[]\n";
 		}
-		result = result.substring(0, result.length() - 2);
-		result += "]\n";
-		return result;
+		return result + "}\n";
 	}
 
 	public void setChildList(List<TreeNode> childList) {
@@ -248,6 +267,41 @@ public class TreeNode {
 
 	public void setText(String text) {
 		this.text = text;
+	}
+
+	/**
+	 * 将孩子节点数据变为JSON格式字符串
+	 */
+	private String childRenToString() {
+		String result = "[\n";
+		for (Iterator<TreeNode> it = childList.iterator(); it.hasNext();) {
+			result += ((TreeNode) it.next()).toString();
+			result += ",\n";
+		}
+		result = result.substring(0, result.length() - 2);
+		result += "]\n";
+		return result;
+	}
+
+	/**
+	 * 将list<TreeNode>变为map<id,TreeNode>，供generateTreeFromTreeNode方法调用
+	 * 
+	 * @param treeNodeList
+	 * @return
+	 */
+	private static Map<Integer, TreeNode> getIdAndTreeNode(
+			List<TreeNode> treeNodeList) {
+		Map<Integer, TreeNode> idAndTreeNodeMap = new HashMap<Integer, TreeNode>();
+
+		for (TreeNode treeNode : treeNodeList) {
+			//复制结点，保证新节点childlist为空
+			TreeNode tNode = new TreeNode();
+			tNode.setParentId(treeNode.getParentId());
+			tNode.setSelfId(treeNode.getSelfId());
+			tNode.setText(treeNode.getText());
+			idAndTreeNodeMap.put(tNode.getSelfId(), tNode);
+		}
+		return idAndTreeNodeMap;
 	}
 
 }
